@@ -4,6 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>AI 技术日报</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%93%B0%3C/text%3E%3C/svg%3E" />
 <style>
   :root {
     --bg: #0d1117; --panel: #161b22; --border: #30363d;
@@ -39,7 +40,27 @@
   #content { max-width: 900px; margin: 0 auto; line-height: 1.7; }
   #content h1 { font-size: 26px; border-bottom: 1px solid var(--border); padding-bottom: 10px; }
   #content h2 { font-size: 20px; margin-top: 28px; border-bottom: 1px solid var(--border); padding-bottom: 6px; }
-  #content h3 { font-size: 16px; margin-top: 20px; }
+  #content h3 {
+    font-size: 16px; margin: 22px 0 0; padding: 10px 14px;
+    background: var(--panel); border: 1px solid var(--border);
+    border-left: 3px solid var(--accent); border-radius: 8px 8px 0 0;
+    line-height: 1.4;
+  }
+  /* 条目元数据块：来源/时间/链接 与 正文清晰分离 */
+  #content .entry-meta {
+    margin: 0; padding: 10px 14px; background: #11161d;
+    border: 1px solid var(--border); border-top: none;
+    border-radius: 0 0 8px 8px; font-size: 13px; color: var(--muted);
+    line-height: 1.8; word-break: break-all;
+  }
+  #content .entry-meta .k { color: var(--muted); }
+  #content .entry-meta .v { color: var(--text); }
+  #content .entry-meta a { color: var(--accent); text-decoration: none; }
+  #content .entry-meta a:hover { text-decoration: underline; }
+  #content .entry-body {
+    margin: 10px 2px 4px; padding: 0 4px; color: var(--text);
+  }
+  #content .entry-body p:first-child { margin-top: 0; }
   #content a { color: var(--accent); text-decoration: none; }
   #content a:hover { text-decoration: underline; }
   #content code { background: #161b22; padding: 2px 6px; border-radius: 4px; font-size: 13px; }
@@ -136,11 +157,60 @@
       if (!r.ok) throw new Error(`raw ${r.status}`);
       const md = await r.text();
       $("content").innerHTML = marked.parse(md);
+      decorateEntries();
       document.title = `AI 技术日报 · ${item.date}`;
       window.scrollTo(0, 0);
     } catch (e) {
       $("content").innerHTML = `<p style='color:#f85149'>读取失败：${e.message}</p>`;
     }
+  }
+
+  // 把每个 h3(条目标题) 后的 "来源: ... | 时间: ... 链接: URL 描述..." 段落
+  // 拆成: .entry-meta(来源/时间/链接, 链接可点) + .entry-body(描述正文)
+  function decorateEntries() {
+    const root = $("content");
+    const hs = root.querySelectorAll("h3");
+    hs.forEach((h) => {
+      let sib = h.nextElementSibling;
+      while (sib && sib.tagName !== "H3" && sib.tagName !== "H2" && sib.tagName !== "H1") {
+        if (sib.tagName === "P" && /来源[:：]/.test(sib.textContent)) {
+          const meta = sib;
+          const text = meta.textContent;
+          // 抽取链接
+          const linkM = text.match(/(https?:\/\/\S+)/);
+          const url = linkM ? linkM[1] : "";
+          const rest = text.replace(url, "").replace(/\s*链接[:：]\s*$/, "");
+          // 拆 来源 / 时间
+          let inner = rest
+            .replace(/来源[:：]/, "<span class='k'>来源：</span><span class='v'>")
+            .replace(/(\|\s*时间[:：])/, "</span> <span class='k'>时间：</span><span class='v'>")
+            .replace(/(\|\s*链接[:：])/, "</span> <span class='k'>链接：</span>");
+          inner += "</span>";
+          if (url) {
+            inner += ` <a href="${url}" target="_blank" rel="noopener">${url}</a>`;
+          }
+          const body = document.createElement("div");
+          body.className = "entry-body";
+          // 把 metadata 之后的段落(描述)搬进 body
+          const metaDiv = document.createElement("div");
+          metaDiv.className = "entry-meta";
+          metaDiv.innerHTML = inner;
+          h.after(metaDiv);
+          // 收集后续段落直到下一个标题，作为 body
+          let n = metaDiv.nextElementSibling;
+          const toMove = [];
+          while (n && n.tagName !== "H3" && n.tagName !== "H2" && n.tagName !== "H1") {
+            if (n.tagName === "P") toMove.push(n);
+            n = n.nextElementSibling;
+          }
+          toMove.forEach((p) => body.appendChild(p));
+          if (body.children.length) metaDiv.after(body);
+          else body.remove();
+          break;
+        }
+        sib = sib.nextElementSibling;
+      }
+    });
   }
 
   loadList();
